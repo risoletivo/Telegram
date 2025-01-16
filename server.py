@@ -12,8 +12,14 @@ client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_tok
 # Inicializar o servidor Flask
 app = Flask(__name__)
 
+@app.route('/', methods=['GET'])
+def index():
+    """Rota raiz para teste"""
+    return jsonify({"status": "Servidor funcionando!", "message": "Bem-vindo ao Telegram Bot API."})
+
 @app.route('/getMessages', methods=['GET'])
 def get_messages():
+    """Retorna mensagens de um chat"""
     try:
         chat_id = request.args.get('chat_id', type=int)
         limit = request.args.get('limit', default=10, type=int)
