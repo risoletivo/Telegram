@@ -11,13 +11,11 @@ bot_token = '7859518986:AAEfD43-ctyHb1DIZat7Rv_oZtYbn-OAIIs'
 # Inicializar o cliente do Telegram
 client = TelegramClient('bot_session', api_id, api_hash)
 
+# Garantir que o cliente esteja conectado ao iniciar o script
+asyncio.run(client.start(bot_token=bot_token))
+
 # Inicializar o Flask
 app = Flask(__name__)
-
-@app.before_first_request
-def start_client():
-    """Certifique-se de que o cliente Telethon está conectado antes da primeira requisição"""
-    asyncio.run(client.start(bot_token=bot_token))
 
 @app.route('/getMessages', methods=['GET'])
 def get_messages():
