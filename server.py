@@ -1,13 +1,14 @@
 from flask import Flask, jsonify, request
 from telethon.sync import TelegramClient
+from telethon.errors import BotMethodInvalidError
 
 # Credenciais do Telegram
 api_id = 28838959
 api_hash = '0689fb8fce69e6d9db522f12f94cc8cb'
 bot_token = '7859518986:AAEfD43-ctyHb1DIZat7Rv_oZtYbn-OAIIs'
 
-# Inicializar o cliente do Telethon
-client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
+# Inicializar o cliente do Telethon com sessão em memória
+client = TelegramClient(None, api_id, api_hash).start(bot_token=bot_token)
 
 # Inicializar o servidor Flask
 app = Flask(__name__)
@@ -37,6 +38,9 @@ def get_messages():
                 })
 
             return jsonify(messages)
+
+    except BotMethodInvalidError as e:
+        return jsonify({"error": "Método restrito para bots. Verifique as permissões do bot ou o tipo de método usado."}), 403
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
