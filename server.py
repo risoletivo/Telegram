@@ -1,6 +1,6 @@
-from flask import Flask, jsonify, request
-from telethon.sync import TelegramClient
-from telethon.errors import BotMethodInvalidError, ChatAdminRequiredError
+import asyncio
+from flask import Flask, jsonify
+from telethon import TelegramClient, events
 import os
 
 # Variáveis de ambiente para credenciais do Telegram
@@ -11,40 +11,41 @@ bot_token = os.getenv("BOT_TOKEN")
 # Inicializar o cliente do Telethon
 client = TelegramClient(None, api_id, api_hash).start(bot_token=bot_token)
 
+# Armazenamento em memória para mensagens (para testes)
+messages_store = []
+
+# Configurar o listener de eventos para novas mensagens
+@client.on(events.NewMessage(chats=-1002318920298))  # ID do grupo
+async def handler(event):
+    """Armazena novas mensagens do grupo."""
+    message_data = {
+        "id": event.message.id,
+        "text": event.message.text or "Sem texto",
+        "date": event.message.date.strftime("%Y-%m-%d %H:%M:%S"),
+        "media": bool(event.message.media),
+    }
+    messages_store.append(message_data)  # Adiciona a mensagem na memória
+    print(f"Nova mensagem recebida: {message_data}")  # Log para ver no console
+
 # Inicializar o servidor Flask
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return jsonify({"status": "Servidor funcionando!", "message": "Bem-vindo ao Telegram Bot API."})
+    return jsonify({"status": "Servidor funcionando!", "message": "API de eventos ativa!"})
 
 @app.route('/getMessages', methods=['GET'])
 def get_messages():
-    """Obtém mensagens de um grupo."""
-    try:
-        chat_id = request.args.get('chat_id', type=int)
-        limit = request.args.get('limit', default=10, type=int)
-        if not chat_id:
-            return jsonify({"error": "chat_id é obrigatório!"}), 400
+    """Retorna mensagens armazenadas."""
+    return jsonify(messages_store)
 
-        with client:
-            messages = []
-            for message in client.iter_messages(chat_id, limit=limit):
-                if message:
-                    messages.append({
-                        "id": message.id,
-                        "text": message.text or "Sem texto",
-                        "date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
-                        "media": bool(message.media),
-                    })
-            return jsonify(messages)
+# Iniciar o cliente e o servidor Flask
+def main():
+    loop = asyncio.get_event_loop()
 
-    except BotMethodInvalidError:
-        return jsonify({"error": "Método restrito para bots. Verifique as permissões do bot ou o tipo de método usado."}), 403
-    except ChatAdminRequiredError:
-        return jsonify({"error": "O bot precisa ser administrador para acessar mensagens neste chat."}), 403
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # Rodar cliente Telethon no mesmo loop do Flask
+    loop.create_task(client.run_until_disconnected())  # Telethon rodando
+    app.run(host='0.0.0.0', port=5000)  # Servidor Flask rodando
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    main()
