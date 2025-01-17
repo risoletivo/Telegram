@@ -18,7 +18,6 @@ messages_store = []
 @client.on(events.NewMessage(chats=-1002318920298))  # Substitua pelo ID do grupo
 async def handler(event):
     """Captura novas mensagens no grupo."""
-    # Obtém as informações da mensagem
     message_data = {
         "id": event.message.id,
         "text": event.message.text or "Sem texto",
@@ -26,8 +25,6 @@ async def handler(event):
         "media": bool(event.message.media),
         "sender_id": event.sender_id,  # ID do remetente
     }
-
-    # Adiciona a mensagem no armazenamento em memória
     messages_store.append(message_data)
     
     # Mantém apenas as últimas 50 mensagens (opcional, para evitar uso excessivo de memória)
@@ -46,8 +43,13 @@ def index():
 @app.route('/getMessages', methods=['GET'])
 def get_messages():
     """Retorna mensagens armazenadas."""
-    # ID do bot para filtrar as mensagens enviadas pelo próprio bot
-    bot_id = client.get_me().id
+    loop = asyncio.get_event_loop()
+
+    # Obtém o ID do bot para filtrar as mensagens enviadas por ele
+    bot = loop.run_until_complete(client.get_me())
+    bot_id = bot.id
+
+    # Verifica se o filtro 'only_bot' foi solicitado
     only_bot = request.args.get('only_bot', default=False, type=bool)
 
     if only_bot:
