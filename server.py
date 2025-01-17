@@ -1,11 +1,12 @@
+import os
 from flask import Flask, jsonify, request
 from telethon.sync import TelegramClient
 from telethon.errors import BotMethodInvalidError
 
-# Credenciais do Telegram
-api_id = 28838959
-api_hash = '0689fb8fce69e6d9db522f12f94cc8cb'
-bot_token = '7859518986:AAEfD43-ctyHb1DIZat7Rv_oZtYbn-OAIIs'
+# Obter credenciais do Telegram das variáveis de ambiente
+api_id = int(os.getenv("API_ID"))
+api_hash = os.getenv("API_HASH")
+bot_token = os.getenv("BOT_TOKEN")
 
 # Inicializar o cliente do Telethon com sessão em memória
 client = TelegramClient(None, api_id, api_hash).start(bot_token=bot_token)
@@ -15,7 +16,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def index():
-    """Rota raiz para teste"""
+    """Rota raiz para verificar se o servidor está funcionando"""
     return jsonify({"status": "Servidor funcionando!", "message": "Bem-vindo ao Telegram Bot API."})
 
 @app.route('/getMessages', methods=['GET'])
@@ -45,4 +46,6 @@ def get_messages():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Porta obtida do ambiente (necessário para o Render)
+    port = int(os.getenv("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
