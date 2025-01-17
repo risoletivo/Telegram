@@ -1,7 +1,9 @@
 import asyncio
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from telethon import TelegramClient, events
 import os
+from datetime import datetime
+from xml.etree.ElementTree import Element, SubElement, tostring
 
 # Variáveis de ambiente para credenciais do Telegram
 api_id = int(os.getenv("API_ID"))
@@ -59,6 +61,45 @@ def get_messages():
     else:
         # Retorna todas as mensagens do grupo
         return jsonify(messages_store)
+
+@app.route('/rssFeed', methods=['GET'])
+def rss_feed():
+    """Gera um RSS feed com as mensagens mais recentes."""
+    # Cria a estrutura principal do RSS
+    rss = Element('rss', version="2.0")
+    channel = SubElement(rss, 'channel')
+    
+    # Informações básicas do canal RSS
+    title = SubElement(channel, 'title')
+    title.text = "Feed de Mensagens do Grupo"
+    
+    link = SubElement(channel, 'link')
+    link.text = "https://telegram-server-7mur.onrender.com/rssFeed"
+    
+    description = SubElement(channel, 'description')
+    description.text = "As mensagens mais recentes do grupo do Telegram."
+    
+    # Adiciona cada mensagem como item do RSS
+    for msg in messages_store:
+        item = SubElement(channel, 'item')
+        
+        item_title = SubElement(item, 'title')
+        item_title.text = f"Mensagem ID {msg['id']}"
+        
+        item_description = SubElement(item, 'description')
+        item_description.text = msg['text']
+        
+        item_pubDate = SubElement(item, 'pubDate')
+        item_pubDate.text = datetime.strptime(msg['date'], "%Y-%m-%d %H:%M:%S").strftime("%a, %d %b %Y %H:%M:%S GMT")
+        
+        item_guid = SubElement(item, 'guid')
+        item_guid.text = f"https://telegram-server-7mur.onrender.com/rssFeed#{msg['id']}"
+    
+    # Gera o XML em texto
+    rss_feed_xml = tostring(rss, encoding="utf-8", method="xml")
+    
+    # Retorna o RSS com cabeçalho correto
+    return Response(rss_feed_xml, mimetype="application/rss+xml")
 
 # Iniciar o cliente e o servidor Flask
 def main():
