@@ -1,9 +1,7 @@
 import asyncio
-from flask import Flask, jsonify, request, Response
-from telethon import TelegramClient, events
+from flask import Flask, jsonify, request
+from telethon import TelegramClient
 import os
-from datetime import datetime
-from xml.etree.ElementTree import Element, SubElement, tostring
 
 # Variáveis de ambiente para credenciais do Telegram
 api_id = int(os.getenv("API_ID"))
@@ -13,93 +11,45 @@ bot_token = os.getenv("BOT_TOKEN")
 # Inicializar o cliente do Telethon
 client = TelegramClient(None, api_id, api_hash).start(bot_token=bot_token)
 
-# Armazenamento em memória para mensagens recentes (para testes)
-messages_store = []
-
-# Configurar o listener de eventos para novas mensagens no grupo
-@client.on(events.NewMessage(chats=-1002318920298))  # Substitua pelo ID do grupo
-async def handler(event):
-    """Captura novas mensagens no grupo."""
-    message_data = {
-        "id": event.message.id,
-        "text": event.message.text or "Sem texto",
-        "date": event.message.date.strftime("%Y-%m-%d %H:%M:%S"),
-        "media": bool(event.message.media),
-        "sender_id": event.sender_id,  # ID do remetente
-    }
-    messages_store.append(message_data)
-    
-    # Mantém apenas as últimas 50 mensagens (opcional, para evitar uso excessivo de memória)
-    if len(messages_store) > 50:
-        messages_store.pop(0)
-
-    print(f"Nova mensagem recebida: {message_data}")  # Log para teste
-
 # Inicializar o servidor Flask
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return jsonify({"status": "Servidor funcionando!", "message": "API de eventos ativa!"})
+    return jsonify({"status": "Servidor funcionando!", "message": "API para buscar mensagens antigas."})
 
-@app.route('/getMessages', methods=['GET'])
-def get_messages():
-    """Retorna mensagens armazenadas."""
+@app.route('/scanMessages', methods=['GET'])
+def scan_messages():
+    """Busca mensagens antigas do grupo."""
+    chat_id = request.args.get('chat_id', type=int)
+    limit = request.args.get('limit', default=100, type=int)
+    offset_id = request.args.get('offset_id', default=0, type=int)  # ID inicial para busca
+    max_messages = request.args.get('max_messages', default=500, type=int)  # Máximo de mensagens
+
+    if not chat_id:
+        return jsonify({"error": "Parâmetro 'chat_id' é obrigatório!"}), 400
+
     loop = asyncio.get_event_loop()
 
-    # Obtém o ID do bot para filtrar as mensagens enviadas por ele
-    bot = loop.run_until_complete(client.get_me())
-    bot_id = bot.id
+    async def fetch_messages():
+        messages = []
+        async for message in client.iter_messages(chat_id, limit=limit, offset_id=offset_id):
+            messages.append({
+                "id": message.id,
+                "text": message.text or "Sem texto",
+                "date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "media": bool(message.media),
+                "sender_id": message.sender_id,
+            })
+            if len(messages) >= max_messages:  # Interrompe se atingir o máximo
+                break
+        return messages
 
-    # Verifica se o filtro 'only_bot' foi solicitado
-    only_bot = request.args.get('only_bot', default=False, type=bool)
-
-    if only_bot:
-        # Filtra mensagens enviadas pelo bot
-        bot_messages = [msg for msg in messages_store if msg["sender_id"] == bot_id]
-        return jsonify(bot_messages)
-    else:
-        # Retorna todas as mensagens do grupo
-        return jsonify(messages_store)
-
-@app.route('/rssFeed', methods=['GET'])
-def rss_feed():
-    """Gera um RSS feed com as mensagens mais recentes."""
-    # Cria a estrutura principal do RSS
-    rss = Element('rss', version="2.0")
-    channel = SubElement(rss, 'channel')
-    
-    # Informações básicas do canal RSS
-    title = SubElement(channel, 'title')
-    title.text = "Feed de Mensagens do Grupo"
-    
-    link = SubElement(channel, 'link')
-    link.text = "https://telegram-server-7mur.onrender.com/rssFeed"
-    
-    description = SubElement(channel, 'description')
-    description.text = "As mensagens mais recentes do grupo do Telegram."
-    
-    # Adiciona cada mensagem como item do RSS
-    for msg in messages_store:
-        item = SubElement(channel, 'item')
-        
-        item_title = SubElement(item, 'title')
-        item_title.text = f"Mensagem ID {msg['id']}"
-        
-        item_description = SubElement(item, 'description')
-        item_description.text = msg['text']
-        
-        item_pubDate = SubElement(item, 'pubDate')
-        item_pubDate.text = datetime.strptime(msg['date'], "%Y-%m-%d %H:%M:%S").strftime("%a, %d %b %Y %H:%M:%S GMT")
-        
-        item_guid = SubElement(item, 'guid')
-        item_guid.text = f"https://telegram-server-7mur.onrender.com/rssFeed#{msg['id']}"
-    
-    # Gera o XML em texto
-    rss_feed_xml = tostring(rss, encoding="utf-8", method="xml")
-    
-    # Retorna o RSS com cabeçalho correto
-    return Response(rss_feed_xml, mimetype="application/rss+xml")
+    try:
+        result = loop.run_until_complete(fetch_messages())
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Iniciar o cliente e o servidor Flask
 def main():
